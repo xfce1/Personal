@@ -31,10 +31,3 @@ import yfinance as yf
 ticker = yf.Ticker("MSFT")
 hist = ticker.history(period="max")
 print(hist)
-
-financials = ticker.financials
-quarterly_financials = ticker.quarterly_financials
-
-
-print(financials)
-print(quarterly_financials)

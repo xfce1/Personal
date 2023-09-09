@@ -128,16 +128,7 @@ dissimilarity = 1 - abs(corr)
 Z = linkage(squareform(dissimilarity), 'complete')
 
 dendrogram(Z, labels=columns, orientation='top', 
-           leaf_rotation=90);
-
- 
-# 
-
- 
-# # Stock info & actions
-# 
-# Get info associated with a given ticker.
-
+           leaf_rotation=90)
  
 ticker_name = tickers[0]
 t =  yf.Ticker(ticker_name)
