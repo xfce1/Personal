@@ -31,14 +31,58 @@ def unrealised_pnl(
         trades: Trades,
         contract_prices: ContractPrices,
     ):
-    pass
+    all_pnl = []
+    cumulative = 0
+    for (current_contract, next_contract), date in trades:
+        current_prices = contract_prices[current_contract]
+        next_prices = contract_prices[next_contract]
+
+        if date not in current_prices.index or date not in next_prices.index:
+            # print(f"Missing prices for {date}: Using last available prices for interpolation")
+            prev_business_day = pd.offsets.BDay(-1).apply(date)
+            current_open = current_prices['Open'].loc[
+                prev_business_day] if prev_business_day in current_prices.index else current_prices['Open'].iloc[-1]
+            next_open = next_prices['Open'].loc[
+                prev_business_day] if prev_business_day in next_prices.index else next_prices['Open'].iloc[-1]
+        else:
+            current_open = current_prices.loc[date, 'Open']
+            next_open = next_prices.loc[date, 'Open']
+
+        pnl = next_open - current_open
+        cumulative += pnl
+        all_pnl.append({'Trade Date': date, 'PnL': pnl, 'Cumulative PnL': cumulative})
+
+    pnl_df = pd.DataFrame(all_pnl)
+    # print(pnl_df)
+    return pnl_df
+    # pass
 
 
 def rolling_prices(
         contract_prices: ContractPrices,
         reference_price: str='Close',
     ):
-    pass
+    # Determine roll dates by calculating the lowest difference between consecutive contracts
+    dates = []
+    contracts = list(contract_prices.keys())
+
+    for i, (contract, price) in enumerate(contract_prices.items()):
+        current_prices = price
+        try:
+            next_prices = contract_prices.get(list(contract_prices.keys())[i+1])
+            common_dates = set(list(current_prices.index)).intersection(set(list(next_prices.index)))
+
+            current_prices = current_prices[current_prices.index.isin(common_dates)]
+            next_prices = next_prices[next_prices.index.isin(common_dates)]
+
+            absolute_diff = abs(next_prices["Close"] - current_prices["Close"])
+            rolling_date = absolute_diff.idxmin()
+            dates.append(rolling_date)
+        except IndexError:
+            print("Last contract reached")
+            continue
+    # print(len(dates), len(contracts))
+    # print(dates)
 
 
 def calculate_basis(
