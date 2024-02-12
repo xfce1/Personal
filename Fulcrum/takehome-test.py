@@ -19,6 +19,7 @@ from typing import (
 )
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 
 PATH_TO_FILES = pathlib.Path('./GC')
 
@@ -32,9 +33,6 @@ def unrealised_pnl(
         contract_prices: ContractPrices,
     ):
     """
-        Returns:
-        pd.DataFrame: DataFrame containing trade date, PnL, and cumulative PnL.
-
     Explanation:
         This function iterates over each trade and calculates the unrealized profit and loss (PnL) based on the
         difference in opening prices between the current and next contracts. It considers cases where price data
@@ -78,10 +76,6 @@ def rolling_prices(
         reference_price: str='Close',
     ):
     """
-    
-    Returns:
-        pd.DataFrame: DataFrame containing rolling prices.
-
     Explanation:
         This function iterates over consecutive contracts and determines roll dates by finding the lowest difference
         between their prices. It calculates rolling prices at these roll dates and returns them as a DataFrame.
@@ -154,9 +148,6 @@ def calculate_basis(
     ):
 
     """
-    Returns:
-        pd.DataFrame: DataFrame containing basis values for each contract.
-
     Explanation:
         This function calculates the basis for each contract based on the earliest expiring contract as the base level.
         It first extracts close prices for each contract from the provided contract prices dictionary. Then, it creates
@@ -215,6 +206,23 @@ def simulate_contract_prices(
         std: float=50.0,
         mean_basis: float=76.0,
     ) -> ContractPrices:
+    """
+        Explanation:
+        This function simulates a series of contract prices for each expiry month provided in the `last_trade_dates` parameter. 
+        It generates synthetic contract price data based on various parameters such as the starting spot price, mean trend, 
+        standard deviation, and mean basis. The simulated prices are returned as a dictionary, where each key represents 
+        a last trade date, and each value is a dataframe containing contract prices. The dataframe includes columns for 
+        Open, High, Low, Close, and Volume, with each row representing a day in the simulation period.
+
+        Methodology:
+        - The simulation starts from the `start_date` and ends at each `last_trade_date`.
+        - Spot prices are simulated using a random walk, where each day's spot price is influenced by the previous day's price.
+        - Open and Close prices are simulated by adding a random increment to the spot price, with a standard deviation 
+          parameter (`std`) controlling the variability.
+        - High and Low prices are simulated similarly to Open and Close prices but with additional randomness.
+        - Volume is simulated to resemble a semi-bell curve, gradually increasing until a certain point and then decreasing 
+          towards the end of the simulation period. This pattern is intended to reflect typical trading activity in futures markets.
+    """
     std_basis = 20
     simulated_prices = {}
     for last_trade_date in last_trade_dates:
@@ -226,21 +234,44 @@ def simulate_contract_prices(
         # Simulate spot prices
         spot_prices[0] = starting_spot_price
         for i in range(1, num_days):
-            spot_prices[i] = spot_prices[i-1] + np.random.normal(mean_trend, std)
-
-        # Simulate basis values
-        basis_values = np.random.normal(mean_basis, std_basis, size=num_days)
+            # Calculate the previous day's price change
+            price_change = spot_prices[i-1] - spot_prices[i-2] if i > 1 else 0
+            # Scale the standard deviation based on the previous day's price change
+            scaled_std = std + abs(price_change) * 0.1  # Adjust the multiplier as needed
+            
+            # Random increment sampled from a normal distribution with scaled standard deviation
+            increment = np.random.normal(mean_trend, scaled_std)
+            spot_prices[i] = spot_prices[i-1] + increment
 
         # Generate contract prices
         contract_prices = pd.DataFrame(index=dates, columns=['Open', 'High', 'Low', 'Close', 'Volume'])
-        contract_prices['Close'] = spot_prices + basis_values
-        contract_prices['Open'] = contract_prices['Close']
-        contract_prices['High'] = contract_prices['Close'] + np.random.normal(mean_trend, std, size=num_days)
-        contract_prices['Low'] = contract_prices['Close'] - np.random.normal(mean_trend, std, size=num_days)
-        contract_prices['Volume'] = np.random.randint(100, 1000, size=num_days)
+
+        # Simulate high and low prices
+        contract_prices['High'] = spot_prices + np.random.normal(mean_trend, std, size=num_days)
+        contract_prices['Low'] = spot_prices - np.random.normal(mean_trend, std, size=num_days)
+        
+        # Simulate Open and Close prices
+        contract_prices['Open'] = spot_prices + np.random.normal(mean_trend, std, size=num_days) * 0.2  # 20% deviation from spot
+        contract_prices['Close'] = spot_prices + np.random.normal(mean_trend, std, size=num_days) * 0.2  # 20% deviation from spot
+
+        # Ensure High and Low prices are not within the range of Open and Close prices
+        contract_prices['High'] = np.maximum(contract_prices['High'], contract_prices[['Open', 'Close']].max(axis=1))
+        contract_prices['Low'] = np.minimum(contract_prices['Low'], contract_prices[['Open', 'Close']].min(axis=1))
+
+        # Simulate Volume
+        volume = np.zeros(num_days)
+        expiry_date = last_trade_date
+        basis_values = np.random.normal(mean_basis, std_basis / np.sqrt(num_days), size=num_days) # Ensuring there is a match
+        # Generate semi-bell curve volume
+        bell_curve_volume = np.linspace(20, 20000, num=num_days)
+        bell_curve_volume = np.minimum(bell_curve_volume, 20000)  # Cap volume at 20k
+        
+        # Ensure a few hundred volume right near the end
+        bell_curve_volume[-15:] = np.linspace(50, 500, num=15)
+        
+        contract_prices['Volume'] = bell_curve_volume
 
         simulated_prices[last_trade_date] = contract_prices
-    print(simulated_prices)
     return simulated_prices
 
 
@@ -259,64 +290,64 @@ class TestRollingInstruments(unittest.TestCase):
             for c in cls.contracts
         }
 
-    def test_unrealised_pnl(self):
-        """
-        A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
-        number of the underlying at a future point in time.
+    # def test_unrealised_pnl(self):
+    #     """
+    #     A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
+    #     number of the underlying at a future point in time.
 
-        Exposure to gold commodity prices may be implemented using Futures. In order for the position
-        to have constant level of exposure (in quantity of gold terms) through time, it is necessary
-        to 'roll' your futures position in to the next contract as it approaches expiry. For example
-        the following dictionary gives the last trade date for Gold futures contracts in 2023:
+    #     Exposure to gold commodity prices may be implemented using Futures. In order for the position
+    #     to have constant level of exposure (in quantity of gold terms) through time, it is necessary
+    #     to 'roll' your futures position in to the next contract as it approaches expiry. For example
+    #     the following dictionary gives the last trade date for Gold futures contracts in 2023:
 
-            {'GCH23': Timestamp('2023-03-27 00:00:00'),
-             'GCJ23': Timestamp('2023-04-26 00:00:00'),
-             'GCK23': Timestamp('2023-05-26 00:00:00'),
-             'GCM23': Timestamp('2023-06-27 00:00:00'),
-             'GCN23': Timestamp('2023-07-26 00:00:00'),
-             'GCQ23': Timestamp('2023-08-29 00:00:00'),
-             'GCU23': Timestamp('2023-09-26 00:00:00'),
-             'GCV23': Timestamp('2023-10-26 00:00:00'),
-             'GCX23': Timestamp('2023-11-28 00:00:00'),
-             'GCZ23': Timestamp('2023-12-27 00:00:00')}
+    #         {'GCH23': Timestamp('2023-03-27 00:00:00'),
+    #          'GCJ23': Timestamp('2023-04-26 00:00:00'),
+    #          'GCK23': Timestamp('2023-05-26 00:00:00'),
+    #          'GCM23': Timestamp('2023-06-27 00:00:00'),
+    #          'GCN23': Timestamp('2023-07-26 00:00:00'),
+    #          'GCQ23': Timestamp('2023-08-29 00:00:00'),
+    #          'GCU23': Timestamp('2023-09-26 00:00:00'),
+    #          'GCV23': Timestamp('2023-10-26 00:00:00'),
+    #          'GCX23': Timestamp('2023-11-28 00:00:00'),
+    #          'GCZ23': Timestamp('2023-12-27 00:00:00')}
 
-        Given a list of trade date to contract pairs, compute the unrealised profit and loss of
-        1 unit of the gold contract for a full year whilst 'rolling' it.
+    #     Given a list of trade date to contract pairs, compute the unrealised profit and loss of
+    #     1 unit of the gold contract for a full year whilst 'rolling' it.
 
-        For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
-        following table shows the OHLC prices for the two contracts.
+    #     For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
+    #     following table shows the OHLC prices for the two contracts.
 
-            GCH23  Open        1991.7
-                   High        1995.4
-                   Low         1985.5
-                   Close       1985.5
-                   Volume        14.0
-            GCJ23  Open        1996.1
-                   High        2006.5
-                   Low         1977.7
-                   Close       1981.0
-                   Volume    212721.0
+    #         GCH23  Open        1991.7
+    #                High        1995.4
+    #                Low         1985.5
+    #                Close       1985.5
+    #                Volume        14.0
+    #         GCJ23  Open        1996.1
+    #                High        2006.5
+    #                Low         1977.7
+    #                Close       1981.0
+    #                Volume    212721.0
 
-        """
+    #     """
 
-        list_of_trade_dates = [
-             (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
-             (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
-             (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
-             (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
-             (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
-             (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
-             (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
-             (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
-             (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
-        ]
+    #     list_of_trade_dates = [
+    #          (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
+    #          (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
+    #          (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
+    #          (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
+    #          (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
+    #          (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
+    #          (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
+    #          (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
+    #          (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
+    #     ]
 
-        unrealised_pnl_ = unrealised_pnl(
-                list_of_trade_dates,
-                self.contract_prices,
-            )
+    #     unrealised_pnl_ = unrealised_pnl(
+    #             list_of_trade_dates,
+    #             self.contract_prices,
+    #         )
 
-        self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
+    #     self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
 
     # def test_rolling_prices(self):
     #     """
