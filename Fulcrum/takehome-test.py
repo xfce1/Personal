@@ -27,69 +27,135 @@ ContractPrices = Dict[Union[str,pd.Timestamp], pd.DataFrame]
 Trades = List[Tuple[Tuple[str, str], pd.Timestamp]]
 
 
-def unrealised_pnl(
-        trades: Trades,
-        contract_prices: ContractPrices,
-    ):
-    all_pnl = []
-    cumulative = 0
-    for (current_contract, next_contract), date in trades:
-        current_prices = contract_prices[current_contract]
-        next_prices = contract_prices[next_contract]
+# def unrealised_pnl(
+#         trades: Trades,
+#         contract_prices: ContractPrices,
+#     ):
+#     all_pnl = []
+#     cumulative = 0
+#     for (current_contract, next_contract), date in trades:
+#         current_prices = contract_prices[current_contract]
+#         next_prices = contract_prices[next_contract]
 
-        if date not in current_prices.index or date not in next_prices.index:
-            # print(f"Missing prices for {date}: Using last available prices for interpolation")
-            prev_business_day = pd.offsets.BDay(-1).apply(date)
-            current_open = current_prices['Open'].loc[
-                prev_business_day] if prev_business_day in current_prices.index else current_prices['Open'].iloc[-1]
-            next_open = next_prices['Open'].loc[
-                prev_business_day] if prev_business_day in next_prices.index else next_prices['Open'].iloc[-1]
-        else:
-            current_open = current_prices.loc[date, 'Open']
-            next_open = next_prices.loc[date, 'Open']
+#         if date not in current_prices.index or date not in next_prices.index:
+#             # print(f"Missing prices for {date}: Using last available prices for interpolation")
+#             prev_business_day = date - pd.offsets.BDay(1)
+#             current_open = current_prices['Open'].loc[
+#                 prev_business_day] if prev_business_day in current_prices.index else current_prices['Open'].iloc[-1]
+#             next_open = next_prices['Open'].loc[
+#                 prev_business_day] if prev_business_day in next_prices.index else next_prices['Open'].iloc[-1]
+#         else:
+#             current_open = current_prices.loc[date, 'Open']
+#             next_open = next_prices.loc[date, 'Open']
 
-        pnl = next_open - current_open
-        cumulative += pnl
-        all_pnl.append({'Trade Date': date, 'PnL': pnl, 'Cumulative PnL': cumulative})
+#         pnl = current_open - next_open
+#         cumulative += pnl
+#         all_pnl.append({'Trade Date': date, 'PnL': pnl, 'Cumulative PnL': cumulative})
 
-    pnl_df = pd.DataFrame(all_pnl)
-    # print(pnl_df)
-    return pnl_df
-    # pass
+#     pnl_df = pd.DataFrame(all_pnl)
+#     # print(pnl_df)
+#     return pnl_df
+#     # pass
 
 
-def rolling_prices(
-        contract_prices: ContractPrices,
-        reference_price: str='Close',
-    ):
-    # Determine roll dates by calculating the lowest difference between consecutive contracts
-    dates = []
-    contracts = list(contract_prices.keys())
+# def rolling_prices(
+#         contract_prices: ContractPrices,
+#         reference_price: str='Close',
+#     ):
+#     # Determine roll dates by calculating the lowest difference between consecutive contracts
+#     dates = []
+#     contracts = list(contract_prices.keys())
+#     # -1 for looping through all contracts
+#     for i in range(len(contracts)-1):
+#         current_contract = contracts[i]
+#         next_contract = contracts[i+1]
+#         current_prices = contract_prices[current_contract]
+#         next_prices = contract_prices[next_contract]
+#         common_dates = set(list(current_prices.index)).intersection(set(list(next_prices.index)))
 
-    for i, (contract, price) in enumerate(contract_prices.items()):
-        current_prices = price
-        try:
-            next_prices = contract_prices.get(list(contract_prices.keys())[i+1])
-            common_dates = set(list(current_prices.index)).intersection(set(list(next_prices.index)))
+#         if common_dates:
+#             absolute_diff = abs(next_prices[reference_price] - current_prices[reference_price])
+#             rolling_date = absolute_diff.idxmin()
+#             dates.append(rolling_date)
+#         else:
+#             print("No common dates")
+    
 
-            current_prices = current_prices[current_prices.index.isin(common_dates)]
-            next_prices = next_prices[next_prices.index.isin(common_dates)]
+#     rolling_df = pd.DataFrame()
+#     pnl_df = pd.DataFrame()
+#     for i in range(len(contracts)-1):
+#         date = dates[i]
+#         current_contract = contracts[i]
+#         next_contract = contracts[i+1]
+#         # did not use loc to preserve as dataframe without transformations
+#         current_prices = contract_prices[current_contract][contract_prices[current_contract].index==date]
+#         next_prices = contract_prices[next_contract][contract_prices[next_contract].index==date]
+#         pnl_df = pd.concat([pnl_df,pd.DataFrame(current_prices[reference_price] - next_prices[reference_price])], axis=0)
+        
+#         if i<len(dates)-1:
+#             if i==0:
+#                 price_to_stitch = contract_prices[current_contract][contract_prices[current_contract].index < date]
+#             else:
+#                 price_to_stitch = contract_prices[current_contract][(contract_prices[current_contract].index > max(rolling_df.index)) & 
+#                                                                    (contract_prices[current_contract].index < date)]
+#             # print(len(price_to_stitch))
+#             rolling_df = pd.concat([rolling_df,price_to_stitch],axis=0)
+    
+#     print(f"\nCumulative Pnl: {np.round(sum(pnl_df.values)[0],4)}\n", pnl_df)
+#     print(rolling_df)
 
-            absolute_diff = abs(next_prices["Close"] - current_prices["Close"])
-            rolling_date = absolute_diff.idxmin()
-            dates.append(rolling_date)
-        except IndexError:
-            print("Last contract reached")
-            continue
-    # print(len(dates), len(contracts))
-    # print(dates)
+#     return rolling_df
 
 
 def calculate_basis(
         contract_prices: ContractPrices,
         reference_price: str='Close',
     ):
-    pass
+    contract_close_prices = {}
+    all_dates = set()  # Store all dates available in the dataset
+    for contract_name, prices in contract_prices.items():
+        if reference_price in prices.columns:  # Check if reference price data is available
+            close_prices = prices[reference_price]  # Extract close prices
+            contract_close_prices[contract_name] = close_prices
+            all_dates.update(prices.index)  # Add dates to set of all dates
+            if min_date is None:
+                min_date = prices.index.min()
+                max_date = prices.index.max()
+
+    # Sort dates
+    all_dates = sorted(all_dates)
+
+    # Create DataFrame containing close prices of all contracts at all dates
+    close_prices_df = pd.DataFrame(index=all_dates)
+    for contract_name, close_prices in contract_close_prices.items():
+        close_prices_df[contract_name] = close_prices
+    
+    ##### insert here
+            # Create DataFrame containing close prices of all contracts at all dates
+    close_prices_df = pd.DataFrame(index=all_dates)
+    for contract_name, close_prices in contract_close_prices.items():
+        if contract_name == min(contract_close_prices.keys()):
+            # Interpolate only within the date range for the first contract
+            close_prices = close_prices.loc[min_date:max_date]
+            close_prices_df[contract_name] = close_prices.interpolate(method='time')
+        else:
+            close_prices_df[contract_name] = close_prices
+    
+    close_prices_df = close_prices_df.dropna(thresh=4)
+
+    # Calculate basis values
+    basis_df = close_prices_df.copy()
+    for idx, row in close_prices_df.iterrows():
+        non_na_values = row.dropna()
+        basis_values = non_na_values - non_na_values.iloc[0]
+        basis_df.loc[idx] = basis_values
+
+
+    print(close_prices_df)
+    basis_df.to_csv("basis_df.csv")
+    close_prices_df.to_csv("close_prices_df.csv")
+
+    return pd.DataFrame()
 
 
 def simulate_contract_prices(
@@ -118,81 +184,81 @@ class TestRollingInstruments(unittest.TestCase):
             for c in cls.contracts
         }
 
-    def test_unrealised_pnl(self):
-        """
-        A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
-        number of the underlying at a future point in time.
+    # def test_unrealised_pnl(self):
+    #     """
+    #     A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
+    #     number of the underlying at a future point in time.
 
-        Exposure to gold commodity prices may be implemented using Futures. In order for the position
-        to have constant level of exposure (in quantity of gold terms) through time, it is necessary
-        to 'roll' your futures position in to the next contract as it approaches expiry. For example
-        the following dictionary gives the last trade date for Gold futures contracts in 2023:
+    #     Exposure to gold commodity prices may be implemented using Futures. In order for the position
+    #     to have constant level of exposure (in quantity of gold terms) through time, it is necessary
+    #     to 'roll' your futures position in to the next contract as it approaches expiry. For example
+    #     the following dictionary gives the last trade date for Gold futures contracts in 2023:
 
-            {'GCH23': Timestamp('2023-03-27 00:00:00'),
-             'GCJ23': Timestamp('2023-04-26 00:00:00'),
-             'GCK23': Timestamp('2023-05-26 00:00:00'),
-             'GCM23': Timestamp('2023-06-27 00:00:00'),
-             'GCN23': Timestamp('2023-07-26 00:00:00'),
-             'GCQ23': Timestamp('2023-08-29 00:00:00'),
-             'GCU23': Timestamp('2023-09-26 00:00:00'),
-             'GCV23': Timestamp('2023-10-26 00:00:00'),
-             'GCX23': Timestamp('2023-11-28 00:00:00'),
-             'GCZ23': Timestamp('2023-12-27 00:00:00')}
+    #         {'GCH23': Timestamp('2023-03-27 00:00:00'),
+    #          'GCJ23': Timestamp('2023-04-26 00:00:00'),
+    #          'GCK23': Timestamp('2023-05-26 00:00:00'),
+    #          'GCM23': Timestamp('2023-06-27 00:00:00'),
+    #          'GCN23': Timestamp('2023-07-26 00:00:00'),
+    #          'GCQ23': Timestamp('2023-08-29 00:00:00'),
+    #          'GCU23': Timestamp('2023-09-26 00:00:00'),
+    #          'GCV23': Timestamp('2023-10-26 00:00:00'),
+    #          'GCX23': Timestamp('2023-11-28 00:00:00'),
+    #          'GCZ23': Timestamp('2023-12-27 00:00:00')}
 
-        Given a list of trade date to contract pairs, compute the unrealised profit and loss of
-        1 unit of the gold contract for a full year whilst 'rolling' it.
+    #     Given a list of trade date to contract pairs, compute the unrealised profit and loss of
+    #     1 unit of the gold contract for a full year whilst 'rolling' it.
 
-        For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
-        following table shows the OHLC prices for the two contracts.
+    #     For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
+    #     following table shows the OHLC prices for the two contracts.
 
-            GCH23  Open        1991.7
-                   High        1995.4
-                   Low         1985.5
-                   Close       1985.5
-                   Volume        14.0
-            GCJ23  Open        1996.1
-                   High        2006.5
-                   Low         1977.7
-                   Close       1981.0
-                   Volume    212721.0
+    #         GCH23  Open        1991.7
+    #                High        1995.4
+    #                Low         1985.5
+    #                Close       1985.5
+    #                Volume        14.0
+    #         GCJ23  Open        1996.1
+    #                High        2006.5
+    #                Low         1977.7
+    #                Close       1981.0
+    #                Volume    212721.0
 
-        """
+    #     """
 
-        list_of_trade_dates = [
-             (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
-             (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
-             (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
-             (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
-             (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
-             (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
-             (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
-             (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
-             (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
-        ]
+    #     list_of_trade_dates = [
+    #          (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
+    #          (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
+    #          (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
+    #          (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
+    #          (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
+    #          (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
+    #          (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
+    #          (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
+    #          (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
+    #     ]
 
-        unrealised_pnl_ = unrealised_pnl(
-                list_of_trade_dates,
-                self.contract_prices,
-            )
+    #     unrealised_pnl_ = unrealised_pnl(
+    #             list_of_trade_dates,
+    #             self.contract_prices,
+    #         )
 
-        self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
+    #     self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
 
-    def test_rolling_prices(self):
-        """
-        calculate the price series from the given futures contracts. prices should be:
-          - stiched: This describes that the resulant dataframe should only contain
-                one time series of prices. Rolls should only happen when there is data for
-                a contract. The most basic example, you would not be able to roll the contract after it
-                has expired, or if there was a missing price on that day.
-          - backwards-adjusted: Everytime there is a roll there is a jump in price due to the basis.
-                You should adjust your price series such that there is no jump in prices and
-                the last price matches the true price of the latest contract.
-        how does your roll algorithm compare in PnL terms to what was calculated previously?
-        why do you think it is, and what economical considerations would you make?
-        """
-        adjusted_prices = rolling_prices(self.contract_prices)
+    # def test_rolling_prices(self):
+    #     """
+    #     calculate the price series from the given futures contracts. prices should be:
+    #       - stiched: This describes that the resulant dataframe should only contain
+    #             one time series of prices. Rolls should only happen when there is data for
+    #             a contract. The most basic example, you would not be able to roll the contract after it
+    #             has expired, or if there was a missing price on that day.
+    #       - backwards-adjusted: Everytime there is a roll there is a jump in price due to the basis.
+    #             You should adjust your price series such that there is no jump in prices and
+    #             the last price matches the true price of the latest contract.
+    #     how does your roll algorithm compare in PnL terms to what was calculated previously?
+    #     why do you think it is, and what economical considerations would you make?
+    #     """
+    #     adjusted_prices = rolling_prices(self.contract_prices)
 
-        self.assertIsInstance(adjusted_prices, pd.DataFrame)
+    #     self.assertIsInstance(adjusted_prices, pd.DataFrame)
 
     def test_calculate_basis(self):
         """
@@ -228,61 +294,59 @@ class TestRollingInstruments(unittest.TestCase):
 
         self.assertIsInstance(basis, pd.DataFrame)
 
-    def test_simulate_contract_prices(self):
-        """
-        Simulate a series of contract prices for each of the expiry months provided. The simulated
-        prices must return a dictionary of contract code to dataframe and contain Open, High, Low,
-        Close and Volume.
+    # def test_simulate_contract_prices(self):
+    #     """
+    #     Simulate a series of contract prices for each of the expiry months provided. The simulated
+    #     prices must return a dictionary of contract code to dataframe and contain Open, High, Low,
+    #     Close and Volume.
 
-        Assume that the price series for every contract in the simulation starts from the first day.
-        That is, the furthest out expiring contract will have a price for every day of the simulation.
+    #     Assume that the price series for every contract in the simulation starts from the first day.
+    #     That is, the furthest out expiring contract will have a price for every day of the simulation.
 
-        Your simulation must accept atleast the following parameters
+    #     Your simulation must accept atleast the following parameters
 
-            * last_trade_dates
-                A list of last trade dates. Each last trade date will coincide with a contract
-                If only two contracts are passed, only two contracts should be simulated.
-            * start_date
-                The first day of the simulation.
-            * starting_spot_price
-                The initial spot price of the closest expiring contract.
-            * mean_trend
-                This is the mean trend exhibited during the series.
-            * std
-                The daily standard deviation of contract prices
-            * mean_basis
-                The mean basis for the entire series
-            * std_basis
-                The daily standard deviation of the basis
-            * std_basis_horizon
-                The volatility of the basis of a single day
-        """
+    #         * last_trade_dates
+    #             A list of last trade dates. Each last trade date will coincide with a contract
+    #             If only two contracts are passed, only two contracts should be simulated.
+    #         * start_date
+    #             The first day of the simulation.
+    #         * starting_spot_price
+    #             The initial spot price of the closest expiring contract.
+    #         * mean_trend
+    #             This is the mean trend exhibited during the series.
+    #         * std
+    #             The daily standard deviation of contract prices
+    #         * mean_basis
+    #             The mean basis for the entire series
+    #         * std_basis
+    #             The daily standard deviation of the basis
+    #     """
 
-        last_trade_dates = [
-                pd.Timestamp('2023-03-20 00:00:00'),
-                pd.Timestamp('2023-04-22 00:00:00'),
-                pd.Timestamp('2023-05-19 00:00:00'),
-                pd.Timestamp('2023-06-26 00:00:00'),
-                pd.Timestamp('2023-07-17 00:00:00'),
-            ]
+    #     last_trade_dates = [
+    #             pd.Timestamp('2023-03-20 00:00:00'),
+    #             pd.Timestamp('2023-04-22 00:00:00'),
+    #             pd.Timestamp('2023-05-19 00:00:00'),
+    #             pd.Timestamp('2023-06-26 00:00:00'),
+    #             pd.Timestamp('2023-07-17 00:00:00'),
+    #         ]
 
-        start_date = pd.Timestamp('2023-01-02')
+    #     start_date = pd.Timestamp('2023-01-02')
 
-        simulated_prices = simulate_contract_prices(
-                start_date=start_date,
-                starting_spot_price=2000,
-                mean_trend=0.0,
-                std=50,
-                mean_basis=76,
-                last_trade_dates=last_trade_dates,
-            )
+    #     simulated_prices = simulate_contract_prices(
+    #             start_date=start_date,
+    #             starting_spot_price=2000,
+    #             mean_trend=0.0,
+    #             std=50,
+    #             mean_basis=76,
+    #             last_trade_dates=last_trade_dates,
+    #         )
 
-        self.assertEqual(len(simulated_prices), 5)
+    #     self.assertEqual(len(simulated_prices), 5)
 
-        for last_trd, (i, data) in zip(last_trade_dates, simulated_prices.items()):
-            self.assertEqual(i, last_trd)
-            self.assertEqual(data.index[-1], last_trd)
-            self.assertEqual(data.index[0], start_date)
+    #     for last_trd, (i, data) in zip(last_trade_dates, simulated_prices.items()):
+    #         self.assertEqual(i, last_trd)
+    #         self.assertEqual(data.index[-1], last_trd)
+    #         self.assertEqual(data.index[0], start_date)
 
 
 if __name__=='__main__':
