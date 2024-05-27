@@ -290,115 +290,115 @@ class TestRollingInstruments(unittest.TestCase):
             for c in cls.contracts
         }
 
-    # def test_unrealised_pnl(self):
-    #     """
-    #     A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
-    #     number of the underlying at a future point in time.
+    def test_unrealised_pnl(self):
+        """
+        A futures contract is a contract between a buyer (seller) to purchase (deliver) a specified
+        number of the underlying at a future point in time.
 
-    #     Exposure to gold commodity prices may be implemented using Futures. In order for the position
-    #     to have constant level of exposure (in quantity of gold terms) through time, it is necessary
-    #     to 'roll' your futures position in to the next contract as it approaches expiry. For example
-    #     the following dictionary gives the last trade date for Gold futures contracts in 2023:
+        Exposure to gold commodity prices may be implemented using Futures. In order for the position
+        to have constant level of exposure (in quantity of gold terms) through time, it is necessary
+        to 'roll' your futures position in to the next contract as it approaches expiry. For example
+        the following dictionary gives the last trade date for Gold futures contracts in 2023:
 
-    #         {'GCH23': Timestamp('2023-03-27 00:00:00'),
-    #          'GCJ23': Timestamp('2023-04-26 00:00:00'),
-    #          'GCK23': Timestamp('2023-05-26 00:00:00'),
-    #          'GCM23': Timestamp('2023-06-27 00:00:00'),
-    #          'GCN23': Timestamp('2023-07-26 00:00:00'),
-    #          'GCQ23': Timestamp('2023-08-29 00:00:00'),
-    #          'GCU23': Timestamp('2023-09-26 00:00:00'),
-    #          'GCV23': Timestamp('2023-10-26 00:00:00'),
-    #          'GCX23': Timestamp('2023-11-28 00:00:00'),
-    #          'GCZ23': Timestamp('2023-12-27 00:00:00')}
+            {'GCH23': Timestamp('2023-03-27 00:00:00'),
+             'GCJ23': Timestamp('2023-04-26 00:00:00'),
+             'GCK23': Timestamp('2023-05-26 00:00:00'),
+             'GCM23': Timestamp('2023-06-27 00:00:00'),
+             'GCN23': Timestamp('2023-07-26 00:00:00'),
+             'GCQ23': Timestamp('2023-08-29 00:00:00'),
+             'GCU23': Timestamp('2023-09-26 00:00:00'),
+             'GCV23': Timestamp('2023-10-26 00:00:00'),
+             'GCX23': Timestamp('2023-11-28 00:00:00'),
+             'GCZ23': Timestamp('2023-12-27 00:00:00')}
 
-    #     Given a list of trade date to contract pairs, compute the unrealised profit and loss of
-    #     1 unit of the gold contract for a full year whilst 'rolling' it.
+        Given a list of trade date to contract pairs, compute the unrealised profit and loss of
+        1 unit of the gold contract for a full year whilst 'rolling' it.
 
-    #     For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
-    #     following table shows the OHLC prices for the two contracts.
+        For example, on the 2023-03-24, we have a position in GCH23 and need to roll into GCJ23. The
+        following table shows the OHLC prices for the two contracts.
 
-    #         GCH23  Open        1991.7
-    #                High        1995.4
-    #                Low         1985.5
-    #                Close       1985.5
-    #                Volume        14.0
-    #         GCJ23  Open        1996.1
-    #                High        2006.5
-    #                Low         1977.7
-    #                Close       1981.0
-    #                Volume    212721.0
+            GCH23  Open        1991.7
+                   High        1995.4
+                   Low         1985.5
+                   Close       1985.5
+                   Volume        14.0
+            GCJ23  Open        1996.1
+                   High        2006.5
+                   Low         1977.7
+                   Close       1981.0
+                   Volume    212721.0
 
-    #     """
+        """
 
-    #     list_of_trade_dates = [
-    #          (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
-    #          (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
-    #          (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
-    #          (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
-    #          (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
-    #          (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
-    #          (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
-    #          (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
-    #          (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
-    #     ]
+        list_of_trade_dates = [
+             (('GCH23', 'GCJ23'), pd.Timestamp('2023-03-20 00:00:00')),
+             (('GCJ23', 'GCK23'), pd.Timestamp('2023-04-22 00:00:00')),
+             (('GCK23', 'GCM23'), pd.Timestamp('2023-05-19 00:00:00')),
+             (('GCM23', 'GCN23'), pd.Timestamp('2023-06-26 00:00:00')),
+             (('GCN23', 'GCQ23'), pd.Timestamp('2023-07-17 00:00:00')),
+             (('GCQ23', 'GCU23'), pd.Timestamp('2023-08-25 00:00:00')),
+             (('GCU23', 'GCV23'), pd.Timestamp('2023-09-18 00:00:00')),
+             (('GCV23', 'GCX23'), pd.Timestamp('2023-10-18 00:00:00')),
+             (('GCX23', 'GCZ23'), pd.Timestamp('2023-11-19 00:00:00'))
+        ]
 
-    #     unrealised_pnl_ = unrealised_pnl(
-    #             list_of_trade_dates,
-    #             self.contract_prices,
-    #         )
+        unrealised_pnl_ = unrealised_pnl(
+                list_of_trade_dates,
+                self.contract_prices,
+            )
 
-    #     self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
+        self.assertIsInstance(unrealised_pnl_, pd.DataFrame)
 
-    # def test_rolling_prices(self):
-    #     """
-    #     calculate the price series from the given futures contracts. prices should be:
-    #       - stiched: This describes that the resulant dataframe should only contain
-    #             one time series of prices. Rolls should only happen when there is data for
-    #             a contract. The most basic example, you would not be able to roll the contract after it
-    #             has expired, or if there was a missing price on that day.
-    #       - backwards-adjusted: Everytime there is a roll there is a jump in price due to the basis.
-    #             You should adjust your price series such that there is no jump in prices and
-    #             the last price matches the true price of the latest contract.
-    #     how does your roll algorithm compare in PnL terms to what was calculated previously?
-    #     why do you think it is, and what economical considerations would you make?
-    #     """
-    #     adjusted_prices = rolling_prices(self.contract_prices)
+    def test_rolling_prices(self):
+        """
+        calculate the price series from the given futures contracts. prices should be:
+          - stiched: This describes that the resulant dataframe should only contain
+                one time series of prices. Rolls should only happen when there is data for
+                a contract. The most basic example, you would not be able to roll the contract after it
+                has expired, or if there was a missing price on that day.
+          - backwards-adjusted: Everytime there is a roll there is a jump in price due to the basis.
+                You should adjust your price series such that there is no jump in prices and
+                the last price matches the true price of the latest contract.
+        how does your roll algorithm compare in PnL terms to what was calculated previously?
+        why do you think it is, and what economical considerations would you make?
+        """
+        adjusted_prices = rolling_prices(self.contract_prices)
 
-    #     self.assertIsInstance(adjusted_prices, pd.DataFrame)
+        self.assertIsInstance(adjusted_prices, pd.DataFrame)
 
-    # def test_calculate_basis(self):
-    #     """
-    #     Future prices are closely correlated with the spot price of the underlying (e.g. CO Comdty
-    #     correlates with the spot price of Brent). The difference between future price and spot is know
-    #     as basis, typically wider away from expiry and then 0 at expiry (no arbitrage opportunity).
-    #     The basis can be positive (contango) or negative (backwardation), describing how a future contract holder
-    #     values it. For example, a holder of an S&P future will discount the expected dividend,
-    #     while a live cattle future holder will have to pay for the maintanance of cows (feed, shelter, etc.)
-    #     produce the price series for one spot and a minimum of future 3 contracts for both cases
-    #     summary: contango 1 spot, 3 futures - backwardation 1 spot, 3 futures (8 total).
-    #     you can assume that both prices and basis have their own volatility (std dev) and mean.
+    def test_calculate_basis(self):
+        """
+        Future prices are closely correlated with the spot price of the underlying (e.g. CO Comdty
+        correlates with the spot price of Brent). The difference between future price and spot is know
+        as basis, typically wider away from expiry and then 0 at expiry (no arbitrage opportunity).
+        The basis can be positive (contango) or negative (backwardation), describing how a future contract holder
+        values it. For example, a holder of an S&P future will discount the expected dividend,
+        while a live cattle future holder will have to pay for the maintanance of cows (feed, shelter, etc.)
+        produce the price series for one spot and a minimum of future 3 contracts for both cases
+        summary: contango 1 spot, 3 futures - backwardation 1 spot, 3 futures (8 total).
+        you can assume that both prices and basis have their own volatility (std dev) and mean.
 
-    #     For this exercise, calculate the basis for each contract, using the earliest expiring contract
-    #     as the base level. For example on the '2023-03-17', the following contract prices and basis are below.
+        For this exercise, calculate the basis for each contract, using the earliest expiring contract
+        as the base level. For example on the '2023-03-17', the following contract prices and basis are below.
 
-    #                 Close	Basis
-    #         GCH23	1985.1	0.0
-    #         GCJ23	1993.7	8.6
-    #         GCK23	2000.9	15.8
-    #         GCM23	2009.8	24.7
-    #         GCN23	NaN     NaN
-    #         GCQ23	2027.1	42.0
-    #         GCU23	NaN     NaN
-    #         GCV23	2039.3	54.2
-    #         GCX23	NaN     NaN
-    #         GCZ23	2057.5	72.4
+                    Close	Basis
+            GCH23	1985.1	0.0
+            GCJ23	1993.7	8.6
+            GCK23	2000.9	15.8
+            GCM23	2009.8	24.7
+            GCN23	NaN     NaN
+            GCQ23	2027.1	42.0
+            GCU23	NaN     NaN
+            GCV23	2039.3	54.2
+            GCX23	NaN     NaN
+            GCZ23	2057.5	72.4
 
-    #     This example, exhibits a positive basis and therefore in contango.
-    #     """
+        This example, exhibits a positive basis and therefore in contango.
+        """
 
-    #     basis = calculate_basis(self.contract_prices, reference_price='Close')
+        basis = calculate_basis(self.contract_prices, reference_price='Close')
 
-    #     self.assertIsInstance(basis, pd.DataFrame)
+        self.assertIsInstance(basis, pd.DataFrame)
 
     def test_simulate_contract_prices(self):
         """
